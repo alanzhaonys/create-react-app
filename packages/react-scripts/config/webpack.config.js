@@ -242,7 +242,7 @@ module.exports = function (webpackEnv) {
       globalObject: 'this',
     },
     optimization: {
-      minimize: isEnvProduction,
+      minimize: false,
       minimizer: [
         // This is only used in production mode
         new TerserPlugin({
@@ -797,17 +797,21 @@ module.exports = function (webpackEnv) {
         }),
     ].filter(Boolean),
     // Some libraries import Node modules but don't use them in the browser.
-    // Tell webpack to provide empty mocks for them so importing them works.
-    node: {
-      module: 'empty',
-      dgram: 'empty',
-      dns: 'mock',
-      fs: 'empty',
-      http2: 'empty',
-      net: 'empty',
-      tls: 'empty',
-      child_process: 'empty',
-    },
+    // Tell Webpack to provide empty mocks for them so importing them works.
+    node: process.env.TARGET_ELECTRON
+      ? undefined
+      : {
+          module: 'empty',
+          dgram: 'empty',
+          dns: 'mock',
+          fs: 'empty',
+          http2: 'empty',
+          net: 'empty',
+          tls: 'empty',
+          child_process: 'empty',
+        },
+    // Support electron-renderer target via environmental flag, default to web
+    target: process.env.TARGET_ELECTRON ? 'electron-renderer' : 'web',
     // Turn off performance processing because we utilize
     // our own hints via the FileSizeReporter
     performance: false,
