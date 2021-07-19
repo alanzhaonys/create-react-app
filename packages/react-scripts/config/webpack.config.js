@@ -20,7 +20,7 @@ const TerserPlugin = require('terser-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const OptimizeCSSAssetsPlugin = require('optimize-css-assets-webpack-plugin');
 const safePostCssParser = require('postcss-safe-parser');
-const { WebpackManifestPlugin } = require('webpack-manifest-plugin');
+const ManifestPlugin = require('webpack-manifest-plugin');
 const InterpolateHtmlPlugin = require('react-dev-utils/InterpolateHtmlPlugin');
 const WorkboxWebpackPlugin = require('workbox-webpack-plugin');
 const WatchMissingNodeModulesPlugin = require('react-dev-utils/WatchMissingNodeModulesPlugin');
@@ -128,25 +128,23 @@ module.exports = function (webpackEnv) {
         // package.json
         loader: require.resolve('postcss-loader'),
         options: {
-          postcssOptions: {
-            plugins: [
-              require('postcss-flexbugs-fixes'),
-              [
-                require('postcss-preset-env'),
-                {
-                  autoprefixer: {
-                    flexbox: 'no-2009',
-                  },
-                  stage: 3,
-                },
-              ],
-              // Adds PostCSS Normalize as the reset css with default options,
-              // so that it honors browserslist config in package.json
-              // which in turn let's users customize the target behavior as per their needs.
-              postcssNormalize(),
-            ],
-          },
-          sourceMap: isEnvProduction && shouldUseSourceMap,
+          // Necessary for external CSS imports to work
+          // https://github.com/facebook/create-react-app/issues/2677
+          ident: 'postcss',
+          plugins: () => [
+            require('postcss-flexbugs-fixes'),
+            require('postcss-preset-env')({
+              autoprefixer: {
+                flexbox: 'no-2009',
+              },
+              stage: 3,
+            }),
+            // Adds PostCSS Normalize as the reset css with default options,
+            // so that it honors browserslist config in package.json
+            // which in turn let's users customize the target behavior as per their needs.
+            postcssNormalize(),
+          ],
+          sourceMap: isEnvProduction ? shouldUseSourceMap : isEnvDevelopment,
         },
       },
     ].filter(Boolean);
@@ -374,13 +372,6 @@ module.exports = function (webpackEnv) {
       rules: [
         // Disable require.ensure as it's not a standard language feature.
         { parser: { requireEnsure: false } },
-        // Handle node_modules packages that contain sourcemaps
-        shouldUseSourceMap && {
-          enforce: 'pre',
-          exclude: /@babel(?:\/|\\{1,2})runtime/,
-          test: /\.(js|mjs|jsx|ts|tsx|css)$/,
-          use: 'source-map-loader',
-        },
         {
           // "oneOf" will traverse all following loaders until one will
           // match the requirements. When no loader matches it will fall
@@ -525,9 +516,6 @@ module.exports = function (webpackEnv) {
                 sourceMap: isEnvProduction
                   ? shouldUseSourceMap
                   : isEnvDevelopment,
-                modules: {
-                  compileType: 'icss',
-                },
               }),
               // Don't consider CSS imports dead code even if the
               // containing package claims to have no side effects.
@@ -545,7 +533,6 @@ module.exports = function (webpackEnv) {
                   ? shouldUseSourceMap
                   : isEnvDevelopment,
                 modules: {
-                  compileType: 'module',
                   getLocalIdent: getCSSModuleLocalIdent,
                 },
               }),
@@ -562,9 +549,6 @@ module.exports = function (webpackEnv) {
                   sourceMap: isEnvProduction
                     ? shouldUseSourceMap
                     : isEnvDevelopment,
-                  modules: {
-                    compileType: 'icss',
-                  },
                 },
                 'sass-loader'
               ),
@@ -585,7 +569,6 @@ module.exports = function (webpackEnv) {
                     ? shouldUseSourceMap
                     : isEnvDevelopment,
                   modules: {
-                    compileType: 'module',
                     getLocalIdent: getCSSModuleLocalIdent,
                   },
                 },
@@ -612,7 +595,7 @@ module.exports = function (webpackEnv) {
             // Make sure to add the new loader(s) before the "file" loader.
           ],
         },
-      ].filter(Boolean),
+      ],
     },
     plugins: [
       // Generates an `index.html` file with the <script> injected.
@@ -665,7 +648,7 @@ module.exports = function (webpackEnv) {
       // This is necessary to emit hot updates (CSS and Fast Refresh):
       isEnvDevelopment && new webpack.HotModuleReplacementPlugin(),
       // Experimental hot reloading for React .
-      // https://github.com/facebook/react/tree/main/packages/react-refresh
+      // https://github.com/facebook/react/tree/master/packages/react-refresh
       isEnvDevelopment &&
         shouldUseReactRefresh &&
         new ReactRefreshWebpackPlugin({
@@ -702,7 +685,7 @@ module.exports = function (webpackEnv) {
       //   `index.html`
       // - "entrypoints" key: Array of files which are included in `index.html`,
       //   can be used to reconstruct the HTML if necessary
-      new WebpackManifestPlugin({
+      new ManifestPlugin({
         fileName: 'asset-manifest.json',
         publicPath: paths.publicUrlOrPath,
         generate: (seed, files, entrypoints) => {
@@ -797,20 +780,17 @@ module.exports = function (webpackEnv) {
         }),
     ].filter(Boolean),
     // Some libraries import Node modules but don't use them in the browser.
-    // Tell Webpack to provide empty mocks for them so importing them works.
-    node: process.env.TARGET_ELECTRON
-      ? undefined
-      : {
-          module: 'empty',
-          dgram: 'empty',
-          dns: 'mock',
-          fs: 'empty',
-          http2: 'empty',
-          net: 'empty',
-          tls: 'empty',
-          child_process: 'empty',
-        },
-    // Support electron-renderer target via environmental flag, default to web
+    // Tell webpack to provide empty mocks for them so importing them works.
+    node: {
+      module: 'empty',
+      dgram: 'empty',
+      dns: 'mock',
+      fs: 'empty',
+      http2: 'empty',
+      net: 'empty',
+      tls: 'empty',
+      child_process: 'empty',
+    },
     target: process.env.TARGET_ELECTRON ? 'electron-renderer' : 'web',
     // Turn off performance processing because we utilize
     // our own hints via the FileSizeReporter
